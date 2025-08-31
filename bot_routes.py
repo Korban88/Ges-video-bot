@@ -1,3 +1,4 @@
+# bot_routes.py
 import os
 from aiogram import Router, types
 from aiogram.filters import Command, CommandStart
@@ -23,8 +24,11 @@ async def start_cmd(m: types.Message):
         "Команды:\n"
         "/help — справка\n"
         "/playbooks — быстрые чек-листы\n"
-        "/kb <запрос> — поиск по базе\n"
-        "/diagnose <описание> — диагностика"
+        "/kb [запрос] — поиск по базе\n"
+        "/diagnose [описание] — диагностика проблемы\n"
+        "Примеры:\n"
+        "/kb pixera output не видит дисплей\n"
+        "/diagnose С5, плазма 65\", оптика Kramer 50м, No Signal"
     )
 
 @router.message(Command("help"))
