@@ -7,7 +7,6 @@ from aiogram.filters import Command, CommandStart
 from prompts import TROUBLESHOOT_TEMPLATE
 from rag import kb_search, suggest_from_playbooks
 from web_search import web_search_best_snippets
-from misses import log_miss, list_misses, clear_misses
 
 router = Router()
 
@@ -16,10 +15,6 @@ ADMINS = set(int(x) for x in os.getenv("ADMINS", "").split(",") if x.strip())
 
 def allowed(user: types.User) -> bool:
     return (not ALLOWED_USER_IDS) or (user.id in ALLOWED_USER_IDS)
-
-def is_admin(user: types.User) -> bool:
-    # если ADMINS не задан — все из белого списка считаются админами
-    return (user.id in ADMINS) or (not ADMINS and allowed(user))
 
 @router.message(CommandStart())
 async def start_cmd(m: types.Message):
@@ -68,15 +63,14 @@ async def kb_cmd(m: types.Message):
     if not q:
         await m.answer("Укажи запрос: /kb pixera outputs не видит дисплей")
         return
-    hits = kb_search(q, limit=5)
+    hits = kb_search(q, limit=3)
     if not hits:
-        log_miss("kb", q, m.from_user.id, m.chat.id, extra={"msg_id": m.message_id})
         await m.answer("В локальной базе пока ничего не нашёл. Попробуй /diagnose — дам чек-лист и варианты.")
         return
     out = []
     for h in hits:
         out.append(f"• <b>{h['title']}</b>\n{h['snippet']}\n— {h['source']}")
-    await m.answer("\n\n".join(out))
+    await m.answer("\n\n".join(out), disable_web_page_preview=True)
 
 @router.message(Command("diagnose"))
 async def diagnose_cmd(m: types.Message):
@@ -89,13 +83,8 @@ async def diagnose_cmd(m: types.Message):
         return
 
     playbook = suggest_from_playbooks(description)
-    kb_hits = kb_search(description, limit=3)
-    web_hits = []
-    if len(kb_hits) < 2:
-        web_hits = web_search_best_snippets(description, limit=2)
-
-    if not playbook and not kb_hits and not web_hits:
-        log_miss("diagnose", description, m.from_user.id, m.chat.id, extra={"msg_id": m.message_id})
+    kb_hits = kb_search(description, limit=2)
+    web_hits = web_search_best_snippets(description, limit=2)  # всегда даём 1–2 источника из интернета
 
     text = TROUBLESHOOT_TEMPLATE(
         description=description,
@@ -104,27 +93,3 @@ async def diagnose_cmd(m: types.Message):
         web_hits=web_hits,
     )
     await m.answer(text, disable_web_page_preview=True)
-
-# Админ-команды
-@router.message(Command("misses"))
-async def misses_cmd(m: types.Message):
-    if not is_admin(m.from_user):
-        await m.answer("Только для админов.")
-        return
-    records = list_misses(limit=30)
-    if not records:
-        await m.answer("Пробелов пока нет — всё покрыто.")
-        return
-    lines = []
-    for r in records:
-        ts = datetime.fromtimestamp(r["ts"]).strftime("%d.%m %H:%M")
-        lines.append(f"• {ts} [{r['kind']}]: {r['query']}")
-    await m.answer("Непокрытые запросы (последние 30):\n" + "\n".join(lines))
-
-@router.message(Command("misses_clear"))
-async def misses_clear_cmd(m: types.Message):
-    if not is_admin(m.from_user):
-        await m.answer("Только для админов.")
-        return
-    clear_misses()
-    await m.answer("Лог непокрытых запросов очищен.")
