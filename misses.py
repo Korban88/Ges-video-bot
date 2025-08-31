@@ -13,7 +13,7 @@ if not os.path.exists(MISSES_PATH):
 def log_miss(kind: str, query: str, user_id: int, chat_id: int, extra: Dict = None) -> None:
     rec = {
         "ts": int(time.time()),
-        "kind": kind,            # "kb" или "diagnose"
+        "kind": kind,      # "kb" или "diagnose"
         "query": query,
         "user_id": user_id,
         "chat_id": chat_id,
@@ -31,8 +31,7 @@ def log_miss(kind: str, query: str, user_id: int, chat_id: int, extra: Dict = No
 def list_misses(limit: int = 30) -> List[Dict]:
     try:
         with open(MISSES_PATH, "r", encoding="utf-8") as f:
-            arr = json.load(f)
-            return arr[:limit]
+            return json.load(f)[:limit]
     except Exception:
         return []
 
