@@ -1,4 +1,5 @@
-import os, yaml
+# rag.py
+import os, re, yaml
 from typing import List, Dict
 
 PLAYBOOK_PATH = os.getenv("PLAYBOOK_PATH", "playbooks.yaml")
@@ -9,6 +10,18 @@ with open(PLAYBOOK_PATH, "r", encoding="utf-8") as f:
 
 def _norm(s: str) -> str:
     return (s or "").lower()
+
+def _strip_md(text: str) -> str:
+    if not text:
+        return ""
+    t = text
+    # убираем markdown-заголовки/жирность/код
+    t = re.sub(r"`{1,3}.*?`{1,3}", " ", t, flags=re.S)
+    t = re.sub(r"\*\*(.*?)\*\*", r"\1", t)
+    t = re.sub(r"__(.*?)__", r"\1", t)
+    t = re.sub(r"^#{1,6}\s*", "", t, flags=re.M)
+    t = re.sub(r"\s{2,}", " ", t)
+    return t.strip()
 
 def suggest_from_playbooks(query: str):
     if query == "_list_all":
@@ -25,22 +38,16 @@ def suggest_from_playbooks(query: str):
 def kb_search(query: str, limit: int = 5) -> List[Dict]:
     q = _norm(query)
     out: List[Dict] = []
-    # Плейбуки тоже считаем базой
+
+    # Плейбуки как база знаний
     for key, pb in _PB.items():
         if key == "__index__": continue
-        text = " ".join([
-            pb.get("title",""),
-            " ".join(pb.get("now",[])),
-            " ".join(pb.get("if_fail",[])),
-            " ".join(pb.get("notes",[]))
-        ]).lower()
-        if any(tok in text for tok in q.split()):
-            out.append({
-                "title": pb.get("title", key),
-                "snippet": " ".join(pb.get("now", [])[:2])[:300],
-                "source": f"playbook:{key}"
-            })
-    # Поиск по текстам в папке kb/
+        text = " ".join([pb.get("title",""), *pb.get("now",[]), *pb.get("if_fail",[]), *pb.get("notes",[])])
+        if any(tok in text.lower() for tok in q.split()):
+            snippet = _strip_md(" ".join(pb.get("now", [])[:3]))[:300]
+            out.append({"title": pb.get("title", key), "snippet": snippet, "source": f"playbook:{key}"})
+
+    # Файлы kb/
     if os.path.isdir(KB_DIR):
         for name in os.listdir(KB_DIR):
             if not name.lower().endswith((".md",".txt")): continue
@@ -50,12 +57,10 @@ def kb_search(query: str, limit: int = 5) -> List[Dict]:
                     text = f.read()
                 low = text.lower()
                 if any(tok in low for tok in q.split()):
-                    pos = max(low.find(q.split()[0]), 0)
-                    start = max(0, pos-120)
-                    end = min(len(text), pos+180)
-                    snippet = text[start:end].replace("\n"," ")
-                    out.append({"title": name, "snippet": snippet[:300], "source": f"kb:{name}"})
+                    snippet = _strip_md(text)[:400]
+                    out.append({"title": name, "snippet": snippet, "source": f"kb:{name}"})
             except Exception:
                 continue
+
     out.sort(key=lambda x: (-len(x["snippet"]), x["title"]))
     return out[:limit]
