@@ -18,7 +18,7 @@ def allowed(user: types.User) -> bool:
     return (not ALLOWED_USER_IDS) or (user.id in ALLOWED_USER_IDS)
 
 def is_admin(user: types.User) -> bool:
-    # если ADMINS не задан — считаем, что все из белого списка = админы
+    # если ADMINS не задан — все из белого списка считаются админами
     return (user.id in ADMINS) or (not ADMINS and allowed(user))
 
 @router.message(CommandStart())
