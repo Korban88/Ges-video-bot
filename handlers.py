@@ -16,12 +16,9 @@ DOCS_DIR.mkdir(parents=True, exist_ok=True)
 SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9а-яА-ЯёЁ._ \-]+")
 
 def sanitize_filename(name: str) -> str:
-    # убираем служебные/опасные символы и обрезаем длину
     name = name.replace("/", "_").replace("\\", "_")
     name = SAFE_NAME_RE.sub("_", name)
-    # защитимся от пустого имени
-    name = name or "file"
-    return name[:120]
+    return (name or "file")[:120]
 
 def allowed_extension(filename: str) -> bool:
     ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
@@ -35,14 +32,12 @@ async def handle_document(msg: Message, bot: Bot):
         await msg.answer("Поддерживаю только PDF/HTML/MD/TXT. Переименуй файл с подходящим расширением.")
         return
 
-    # Скачиваем файл
     tg_file = await bot.get_file(doc.file_id)
     dest = DOCS_DIR / filename
     await bot.download_file(tg_file.file_path, destination=dest)
 
     await msg.answer(f"Файл сохранён: <code>{dest.as_posix()}</code>\nПересобираю индекс...")
 
-    # Пересборка индекса (в отдельном потоке)
     try:
         from rag import build_index
     except Exception as e:
@@ -78,10 +73,9 @@ async def diagnose(msg: Message):
     else:
         problems.append("✅ Папка docs/ доступна")
     try:
-        test = (DOCS_DIR / ".writetest").open("w")
-        test.write("ok")
-        test.close()
-        (DOCS_DIR / ".writetest").unlink(missing_ok=True)
+        p = DOCS_DIR / ".writetest"
+        p.write_text("ok", encoding="utf-8")
+        p.unlink(missing_ok=True)
         problems.append("✅ Есть права на запись в docs/")
     except Exception:
         problems.append("❌ Нет прав на запись в docs/")
